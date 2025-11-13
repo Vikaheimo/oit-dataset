@@ -3,7 +3,7 @@ from torchvision import transforms, models
 import torch.nn as nn
 from PIL import Image
 
-classes = ['cloudy', 'fog', 'sunny']
+classes = ['cloudy', 'fog', 'sunny', 'sunrise', 'sunset']
 
 model = models.resnet18(weights=None)
 model.fc = nn.Linear(model.fc.in_features, len(classes))
@@ -25,6 +25,7 @@ inp = transform(img).unsqueeze(0)
 
 with torch.no_grad():
     outputs = model(inp)
+    print(outputs)
     _, predicted_idx = torch.max(outputs, 1)
     confidence = torch.nn.functional.softmax(outputs, dim=1)[0][predicted_idx].item()
 
