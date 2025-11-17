@@ -3,7 +3,7 @@ from torchvision import transforms, models
 import torch.nn as nn
 from PIL import Image
 
-classes = ['beautiful_sunrise', 'beautiful_sunset', 'boring_cloudy', 'clear_sky', 'fog', 'good_cloudy', 'low_mist', 'storm']
+classes = ['beautiful_sunrise', 'beautiful_sunset', 'boring_cloudy', 'clear_sky', 'fog', 'good_cloudy', 'storm']
 
 model = models.resnet18(weights=None)
 model.fc = nn.Linear(model.fc.in_features, len(classes))
