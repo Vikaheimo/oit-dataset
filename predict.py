@@ -26,7 +26,10 @@ inp = transform(img).unsqueeze(0)
 with torch.no_grad():
     outputs = model(inp)
     _, predicted_idx = torch.max(outputs, 1)
-    confidence = torch.nn.functional.softmax(outputs, dim=1)[0][predicted_idx].item()
+    probs = torch.nn.functional.softmax(outputs, dim=1)[0]
+    for i, p in enumerate(probs):
+        print(f"{classes[i]}: {p.item():.4f}")
+    confidence = probs[predicted_idx.item()].item()
 
 predicted_label = classes[predicted_idx.item()]
 print(f"Predicted Weather: {predicted_label}  (Confidence: {confidence:.2f})")
