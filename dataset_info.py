@@ -1,5 +1,6 @@
 import os
 
+
 def count_files_in_subfolders(base_folder="data"):
     total_files = 0
     folder_counts = {}

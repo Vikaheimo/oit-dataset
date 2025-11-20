@@ -3,21 +3,28 @@ from torchvision import transforms, models
 import torch.nn as nn
 from PIL import Image
 
-classes = ['beautiful_sunrise', 'beautiful_sunset', 'boring_cloudy', 'clear_sky', 'fog', 'good_cloudy', 'storm']
+classes = [
+    "beautiful_sunrise",
+    "beautiful_sunset",
+    "boring_cloudy",
+    "clear_sky",
+    "fog",
+    "good_cloudy",
+    "storm",
+]
 
 model = models.resnet18(weights=None)
 model.fc = nn.Linear(model.fc.in_features, len(classes))
 model.load_state_dict(torch.load("weather_resnet18.pth", map_location="cpu"))
 model.eval()
 
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225]
-    ),
-])
+transform = transforms.Compose(
+    [
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ]
+)
 
 image_path = "test.jpg"
 img = Image.open(image_path).convert("RGB")
