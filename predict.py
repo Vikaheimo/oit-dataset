@@ -58,7 +58,13 @@ def predict_image(img_path: str):
 
 def predict_frame(img: Image.Image):
     """Run weather prediction on a single video frame or image."""
-    inp = transform(img).unsqueeze(0).to(device)
+
+    raw = transform(img)
+    if not isinstance(raw, torch.Tensor):
+        # ensure we have a tensor (transform may not include ToTensor)
+        raw = transforms.ToTensor()(raw)
+
+    inp = raw.unsqueeze(0).to(device)
 
     with torch.no_grad():
         outputs = model(inp)
