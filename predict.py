@@ -51,50 +51,52 @@ transform = transforms.Compose(
 )
 
 
-def predict_image(img_path: str) -> Tuple[str, float]:
+def predict_image(image_path: str) -> Tuple[str, float]:
     """Predict weather from an image file.
 
     Returns a tuple of (predicted_label, confidence).
     """
-    img = Image.open(img_path).convert("RGB")
-    probs, pred_idx = predict_frame(img)
-    confidence = probs[pred_idx].item()
+    image = Image.open(image_path).convert("RGB")
+    probabilities, predicted_index = predict_frame(image)
+    confidence = probabilities[predicted_index].item()
 
-    for i, p in enumerate(probs):
-        print(f"{CLASSES[i]}: {p.item():.4f}")
+    for index, probability in enumerate(probabilities):
+        print(f"{CLASSES[index]}: {probability.item():.4f}")
 
-    print(f"\nPredicted Weather: {CLASSES[pred_idx]}  (Confidence: {confidence:.2f})")
-    return CLASSES[pred_idx], confidence
+    print(
+        f"\nPredicted Weather: {CLASSES[predicted_index]}  (Confidence: {confidence:.2f})"
+    )
+    return CLASSES[predicted_index], confidence
 
 
-def predict_frame(img: Image.Image) -> Tuple[torch.Tensor, int]:
+def predict_frame(image: Image.Image) -> Tuple[torch.Tensor, int]:
     """Run weather prediction on a single video frame or image.
 
     Returns (probabilities_tensor, predicted_index).
     """
-    raw = transform(img)
-    if not isinstance(raw, torch.Tensor):
+    raw_input = transform(image)
+    if not isinstance(raw_input, torch.Tensor):
         # ensure we have a tensor (transform may not include ToTensor)
-        raw = transforms.ToTensor()(raw)
+        raw_input = transforms.ToTensor()(raw_input)
 
-    inp = raw.unsqueeze(0).to(DEVICE)
+    model_input = raw_input.unsqueeze(0).to(DEVICE)
 
     with torch.no_grad():
-        outputs = MODEL(inp)
-        probs = torch.nn.functional.softmax(outputs, dim=1)[0]
-        pred_idx = int(torch.argmax(probs).item())
+        outputs = MODEL(model_input)
+        probabilities = torch.nn.functional.softmax(outputs, dim=1)[0]
+        predicted_index = int(torch.argmax(probabilities).item())
 
-    return probs, pred_idx
+    return probabilities, predicted_index
 
 
-def format_timestamp(frame_idx: int, fps: float) -> str:
+def format_timestamp(frame_index: int, fps: float) -> str:
     """Calculate a formatted timestamp for a frame index.
 
     Returns a string in MM:SS format.
     """
-    timestamp_sec = frame_idx / fps if fps else 0
-    minutes = int(timestamp_sec // 60)
-    seconds = int(timestamp_sec % 60)
+    timestamp_seconds = frame_index / fps if fps else 0
+    minutes = int(timestamp_seconds // 60)
+    seconds = int(timestamp_seconds % 60)
     return f"{minutes:02d}:{seconds:02d}"
 
 
@@ -103,38 +105,40 @@ def predict_video(
 ) -> List[Tuple[int, str, str, float]]:
     """Predict weather for key frames in a video and show timestamps.
 
-    Returns a list of tuples: (frame_idx, time_str, label, confidence).
+    Returns a list of tuples: (frame_index, formatted_timestamp, label, confidence).
     """
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
+    video_capture = cv2.VideoCapture(video_path)
+    if not video_capture.isOpened():
         raise FileNotFoundError(f"Could not open video file: {video_path}")
 
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_count = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = video_capture.get(cv2.CAP_PROP_FPS)
     print(f"Processing video: {video_path}")
     print(f"Total frames: {frame_count}, FPS: {fps:.2f}\n")
 
     results: List[Tuple[int, str, str, float]] = []
-    frame_idx = 0
+    frame_index = 0
 
     while True:
-        ret, frame = cap.read()
-        if not ret:
+        has_frame, frame = video_capture.read()
+        if not has_frame:
             break
 
-        if frame_idx % frame_skip == 0:
-            img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            probabilities, predicted_index = predict_frame(img)
+        if frame_index % frame_skip == 0:
+            image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            probabilities, predicted_index = predict_frame(image)
             label = CLASSES[predicted_index]
             confidence = probabilities[predicted_index].item()
 
-            time_str = format_timestamp(frame_idx, fps)
-            results.append((frame_idx, time_str, label, confidence))
-            print(f"Frame {frame_idx} ({time_str}): {label} ({confidence:.2f})")
+            formatted_timestamp = format_timestamp(frame_index, fps)
+            results.append((frame_index, formatted_timestamp, label, confidence))
+            print(
+                f"Frame {frame_index} ({formatted_timestamp}): {label} ({confidence:.2f})"
+            )
 
-        frame_idx += 1
+        frame_index += 1
 
-    cap.release()
+    video_capture.release()
 
     # Aggregate results
     labels = [label for _, _, label, _ in results]
@@ -155,10 +159,11 @@ def predict_video_or_image(
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"File not found: {input_path}")
 
-    ext = os.path.splitext(input_path)[1].lower()
-    if ext in [".jpg", ".jpeg", ".png", ".bmp"]:
+    file_extension = os.path.splitext(input_path)[1].lower()
+
+    if file_extension in [".jpg", ".jpeg", ".png", ".bmp"]:
         return predict_image(input_path)
-    if ext in [".mp4", ".avi", ".mov", ".mkv"]:
+    if file_extension in [".mp4", ".avi", ".mov", ".mkv"]:
         return predict_video(input_path, frame_skip=30)
 
     raise ValueError("Unsupported file type. Please provide an image or video file.")
