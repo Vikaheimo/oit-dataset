@@ -46,13 +46,8 @@ transform = transforms.Compose(
 def predict_image(img_path: str):
     """Predict weather from an image file."""
     img = Image.open(img_path).convert("RGB")
-    inp = transform(img).unsqueeze(0).to(device)
-
-    with torch.no_grad():
-        outputs = model(inp)
-        probs = torch.nn.functional.softmax(outputs, dim=1)[0]
-        pred_idx = torch.argmax(probs).item()
-        confidence = probs[pred_idx].item()
+    probs, pred_idx = predict_frame(img)
+    confidence = probs[pred_idx].item()
 
     for i, p in enumerate(probs):
         print(f"{classes[i]}: {p.item():.4f}")
@@ -61,15 +56,16 @@ def predict_image(img_path: str):
     return classes[pred_idx], confidence
 
 
-def predict_frame(frame):
-    """Run weather prediction on a single video frame."""
-    img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+def predict_frame(img: Image.Image):
+    """Run weather prediction on a single video frame or image."""
     inp = transform(img).unsqueeze(0).to(device)
+
     with torch.no_grad():
         outputs = model(inp)
         probs = torch.nn.functional.softmax(outputs, dim=1)[0]
-        pred_idx = torch.argmax(probs).item()
-        return classes[pred_idx], probs[pred_idx].item()
+        pred_idx = int(torch.argmax(probs).item())
+
+        return probs, pred_idx
 
 
 def format_timestamp(frame_idx: int, fps: float):
@@ -97,10 +93,14 @@ def predict_video(video_path, frame_skip=30):
             break
 
         if frame_idx % frame_skip == 0:
-            label, conf = predict_frame(frame)
+            img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            probabilities, predicted_index = predict_frame(img)
+            label = classes[predicted_index]
+            confidence = probabilities[predicted_index].item()
+
             time_str = format_timestamp(frame_idx, fps)
-            results.append((frame_idx, time_str, label, conf))
-            print(f"Frame {frame_idx} ({time_str}): {label} ({conf:.2f})")
+            results.append((frame_idx, time_str, label, confidence))
+            print(f"Frame {frame_idx} ({time_str}): {label} ({confidence:.2f})")
 
         frame_idx += 1
 
@@ -135,8 +135,8 @@ def predict_video_or_image(input_path: str):
 
 
 def main():
-    # input_path = "test.jpg"
-    input_path = "test.mp4"
+    input_path = "test.jpg"
+    # input_path = "test.mp4"
     predict_video_or_image(input_path)
 
 
