@@ -5,6 +5,8 @@ import torch.nn as nn
 from torchvision import transforms, models
 from PIL import Image
 from collections import Counter
+import argparse
+import sys
 
 classes = [
     "beautiful_sunrise",
@@ -141,10 +143,20 @@ def predict_video_or_image(input_path: str):
 
 
 def main():
-    input_path = "test.jpg"
-    # input_path = "test.mp4"
-    predict_video_or_image(input_path)
+    parser = argparse.ArgumentParser(
+        description="Predict weather from an image or video file."
+    )
+    parser.add_argument("input_path", help="Path to image or video file")
+    args = parser.parse_args()
 
+    try:
+        predict_video_or_image(args.input_path)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Unexpected error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
