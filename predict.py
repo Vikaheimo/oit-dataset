@@ -72,8 +72,16 @@ def predict_frame(frame):
         return classes[pred_idx], probs[pred_idx].item()
 
 
+def format_timestamp(frame_idx: int, fps: float):
+    """Calculates a formatted timestamp of a frame index."""
+    timestamp_sec = frame_idx / fps if fps else 0
+    minutes = int(timestamp_sec // 60)
+    seconds = int(timestamp_sec % 60)
+    return f"{minutes:02d}:{seconds:02d}"
+
+
 def predict_video(video_path, frame_skip=30):
-    """Predict weather for key frames in a video."""
+    """Predict weather for key frames in a video and show timestamps."""
     cap = cv2.VideoCapture(video_path)
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -90,15 +98,16 @@ def predict_video(video_path, frame_skip=30):
 
         if frame_idx % frame_skip == 0:
             label, conf = predict_frame(frame)
-            results.append((frame_idx, label, conf))
-            print(f"Frame {frame_idx}: {label} ({conf:.2f})")
+            time_str = format_timestamp(frame_idx, fps)
+            results.append((frame_idx, time_str, label, conf))
+            print(f"Frame {frame_idx} ({time_str}): {label} ({conf:.2f})")
 
         frame_idx += 1
 
     cap.release()
 
     # Aggregate results
-    labels = [label for _, label, _ in results]
+    labels = [label for _, _, label, _ in results]
     if not labels:
         print("No frames analyzed. Check if the video file is valid.")
         return results
