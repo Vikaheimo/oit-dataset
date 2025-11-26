@@ -5,6 +5,7 @@ predictions on single images or videos (key-frame sampling).
 """
 
 import argparse
+from dataclasses import dataclass
 import logging
 import os
 import sys
@@ -18,6 +19,23 @@ import torch.nn as nn
 from torchvision import models, transforms
 
 
+@dataclass
+class FrameData:
+    """
+    Stores metadata and prediction probabilities for a single video frame or image.
+
+    Attributes:
+        frame_index (int | None): The index of the frame in the video, or None for images.
+        formatted_timestamp (str | None): Human-readable timestamp for the frame, or None for images.
+        probabilities (list[float]): List of predicted probabilities for each weather class,
+            ordered according to the CLASSES list.
+    """
+
+    frame_index: int | None
+    formatted_timestamp: str | None
+    probabilities: list[float]
+
+
 CLASSES = [
     "beautiful_sunrise",
     "beautiful_sunset",
@@ -27,7 +45,6 @@ CLASSES = [
     "good_cloudy",
     "storm",
 ]
-
 DEFAULT_LOG_LEVEL = logging.INFO
 DEFAULT_LOG_LEVEL_STRING = "INFO"
 MODEL_PATH = "weather_resnet18.pth"
@@ -47,7 +64,6 @@ def get_log_level_from_env() -> int:
     if isinstance(level, int):
         return level
 
-    # Fallback if invalid env var value
     return DEFAULT_LOG_LEVEL
 
 
@@ -82,23 +98,21 @@ transform = transforms.Compose(
 )
 
 
-def predict_image(image_path: str) -> Tuple[str, float]:
+def predict_image(image_path: str) -> FrameData:
     """Predict weather from an image file.
 
-    Returns a tuple of (predicted_label, confidence).
+    Returns a FrameData object with data from the prediction.
     """
     logger.debug(f"Processing image: {image_path}")
     image = Image.open(image_path).convert("RGB")
     probabilities, predicted_index = predict_frame(image)
     confidence = probabilities[predicted_index].item()
 
-    for index, probability in enumerate(probabilities):
-        logger.debug(f"{CLASSES[index]}: {probability.item():.4f}")
-
     logger.info(
         f"Predicted Weather: {CLASSES[predicted_index]}  (Confidence: {confidence:.2f})"
     )
-    return CLASSES[predicted_index], confidence
+
+    return FrameData(None, None, [probability.item() for probability in probabilities])
 
 
 def predict_frame(image: Image.Image) -> Tuple[torch.Tensor, int]:
@@ -132,12 +146,10 @@ def format_timestamp(frame_index: int, fps: float) -> str:
     return f"{minutes:02d}:{seconds:02d}"
 
 
-def predict_video(
-    video_path: str, frame_skip: int = 30
-) -> List[Tuple[int, str, str, float]]:
+def predict_video(video_path: str, frame_skip: int = 30) -> List[FrameData]:
     """Predict weather for key frames in a video and show timestamps.
 
-    Returns a list of tuples: (frame_index, formatted_timestamp, label, confidence).
+    Returns a list of FrameData objects containing frame prediction results.
     """
     video_capture = cv2.VideoCapture(video_path)
     if not video_capture.isOpened():
@@ -148,7 +160,7 @@ def predict_video(
     logger.debug(f"Processing video: {video_path}")
     logger.debug(f"Total frames: {frame_count}, FPS: {fps:.2f}")
 
-    results: List[Tuple[int, str, str, float]] = []
+    results: List[FrameData] = []
     frame_index = 0
 
     while True:
@@ -163,7 +175,14 @@ def predict_video(
             confidence = probabilities[predicted_index].item()
 
             formatted_timestamp = format_timestamp(frame_index, fps)
-            results.append((frame_index, formatted_timestamp, label, confidence))
+            results.append(
+                FrameData(
+                    frame_index,
+                    formatted_timestamp,
+                    [probability.item() for probability in probabilities],
+                )
+            )
+
             logger.debug(
                 f"Frame {frame_index} ({formatted_timestamp}): {label} ({confidence:.2f})"
             )
@@ -172,10 +191,14 @@ def predict_video(
 
     video_capture.release()
 
-    # Aggregate results
-    labels = [label for _, _, label, _ in results]
-    if not labels:
+    if not results:
         raise ValueError("No frames analyzed. Check if the video file is valid.")
+
+    labels = []
+
+    for frame in results:
+        max_index = frame.probabilities.index(max(frame.probabilities))
+        labels.append(CLASSES[max_index])
 
     most_common = Counter(labels).most_common(1)[0]
     logger.info("--- SUMMARY ---")
@@ -186,7 +209,7 @@ def predict_video(
 
 def predict_video_or_image(
     input_path: str,
-) -> Union[Tuple[str, float], List[Tuple[int, str, str, float]]]:
+) -> Union[FrameData, List[FrameData]]:
     """
     Predict labels for a single image or a video file.
 
