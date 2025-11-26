@@ -143,8 +143,7 @@ def predict_video(
     # Aggregate results
     labels = [label for _, _, label, _ in results]
     if not labels:
-        print("No frames analyzed. Check if the video file is valid.")
-        return results
+        raise ValueError("No frames analyzed. Check if the video file is valid.")
 
     most_common = Counter(labels).most_common(1)[0]
     print("\n--- SUMMARY ---")
@@ -156,6 +155,13 @@ def predict_video(
 def predict_video_or_image(
     input_path: str,
 ) -> Union[Tuple[str, float], List[Tuple[int, str, str, float]]]:
+    """
+    Predict labels for a single image or a video file.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        ValueError: If the file type is unsupported, or if no frames are analyzed in a video.
+    """
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"File not found: {input_path}")
 
