@@ -5,12 +5,14 @@ predictions on single images or videos (key-frame sampling).
 """
 
 import argparse
+import logging
 import os
 import sys
 from collections import Counter
 from typing import List, Tuple, Union
 import cv2
 from PIL import Image
+from dotenv import load_dotenv
 import torch
 import torch.nn as nn
 from torchvision import models, transforms
@@ -26,11 +28,40 @@ CLASSES = [
     "storm",
 ]
 
+DEFAULT_LOG_LEVEL = logging.INFO
+DEFAULT_LOG_LEVEL_STRING = "INFO"
 MODEL_PATH = "weather_resnet18.pth"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
+load_dotenv()
+
+
+def get_log_level_from_env() -> int:
+    """Get the logging level from the LOG_LEVEL environment variable."""
+    log_level_str = os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL_STRING).upper()
+
+    # `logging.getLevelName` doesn't convert strings properly,
+    # so we use `getattr` to map manually to level constants.
+    level = getattr(logging, log_level_str, None)
+
+    if isinstance(level, int):
+        return level
+
+    # Fallback if invalid env var value
+    return DEFAULT_LOG_LEVEL
+
+
+logging.basicConfig(
+    level=get_log_level_from_env(),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S %p",
+)
+
+logger = logging.getLogger(__name__)
+
 
 def load_model(model_path: str) -> torch.nn.Module:
+    logger.debug(f"Loading model from path '{model_path}'")
     model = models.resnet18(weights=None)
     model.fc = nn.Linear(model.fc.in_features, len(CLASSES))
     model.load_state_dict(torch.load(model_path, map_location=DEVICE))
@@ -56,15 +87,16 @@ def predict_image(image_path: str) -> Tuple[str, float]:
 
     Returns a tuple of (predicted_label, confidence).
     """
+    logger.debug(f"Processing image: {image_path}")
     image = Image.open(image_path).convert("RGB")
     probabilities, predicted_index = predict_frame(image)
     confidence = probabilities[predicted_index].item()
 
     for index, probability in enumerate(probabilities):
-        print(f"{CLASSES[index]}: {probability.item():.4f}")
+        logger.debug(f"{CLASSES[index]}: {probability.item():.4f}")
 
-    print(
-        f"\nPredicted Weather: {CLASSES[predicted_index]}  (Confidence: {confidence:.2f})"
+    logger.info(
+        f"Predicted Weather: {CLASSES[predicted_index]}  (Confidence: {confidence:.2f})"
     )
     return CLASSES[predicted_index], confidence
 
@@ -113,8 +145,8 @@ def predict_video(
 
     frame_count = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = video_capture.get(cv2.CAP_PROP_FPS)
-    print(f"Processing video: {video_path}")
-    print(f"Total frames: {frame_count}, FPS: {fps:.2f}\n")
+    logger.debug(f"Processing video: {video_path}")
+    logger.debug(f"Total frames: {frame_count}, FPS: {fps:.2f}")
 
     results: List[Tuple[int, str, str, float]] = []
     frame_index = 0
@@ -132,7 +164,7 @@ def predict_video(
 
             formatted_timestamp = format_timestamp(frame_index, fps)
             results.append((frame_index, formatted_timestamp, label, confidence))
-            print(
+            logger.debug(
                 f"Frame {frame_index} ({formatted_timestamp}): {label} ({confidence:.2f})"
             )
 
@@ -146,8 +178,8 @@ def predict_video(
         raise ValueError("No frames analyzed. Check if the video file is valid.")
 
     most_common = Counter(labels).most_common(1)[0]
-    print("\n--- SUMMARY ---")
-    print(f"Most frequent weather: {most_common[0]} ({most_common[1]} frames)")
+    logger.info("--- SUMMARY ---")
+    logger.info(f"Most frequent weather: {most_common[0]} ({most_common[1]} frames)")
 
     return results
 
@@ -185,10 +217,10 @@ def main() -> None:
     try:
         predict_video_or_image(args.input_path)
     except (FileNotFoundError, ValueError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        logger.error(str(exc))
         sys.exit(1)
     except Exception as exc:  # pragma: no cover - unexpected runtime error
-        print(f"Unexpected error: {exc}", file=sys.stderr)
+        logger.critical(f"Unexpected error: {exc}", exc_info=True)
         sys.exit(1)
 
 
