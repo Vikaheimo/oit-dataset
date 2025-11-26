@@ -18,6 +18,8 @@ import torch
 import torch.nn as nn
 from torchvision import models, transforms
 
+import constants
+
 
 @dataclass
 class FrameData:
@@ -36,18 +38,6 @@ class FrameData:
     probabilities: list[float]
 
 
-CLASSES = [
-    "beautiful_sunrise",
-    "beautiful_sunset",
-    "boring_cloudy",
-    "clear_sky",
-    "fog",
-    "good_cloudy",
-    "storm",
-]
-DEFAULT_LOG_LEVEL = logging.INFO
-DEFAULT_LOG_LEVEL_STRING = "INFO"
-MODEL_PATH = "weather_resnet18.pth"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 load_dotenv()
@@ -55,7 +45,7 @@ load_dotenv()
 
 def get_log_level_from_env() -> int:
     """Get the logging level from the LOG_LEVEL environment variable."""
-    log_level_str = os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL_STRING).upper()
+    log_level_str = os.getenv("LOG_LEVEL", constants.DEFAULT_LOG_LEVEL_STRING).upper()
 
     # `logging.getLevelName` doesn't convert strings properly,
     # so we use `getattr` to map manually to level constants.
@@ -64,7 +54,7 @@ def get_log_level_from_env() -> int:
     if isinstance(level, int):
         return level
 
-    return DEFAULT_LOG_LEVEL
+    return constants.DEFAULT_LOG_LEVEL
 
 
 logging.basicConfig(
@@ -79,14 +69,15 @@ logger = logging.getLogger(__name__)
 def load_model(model_path: str) -> torch.nn.Module:
     logger.debug(f"Loading model from path '{model_path}'")
     model = models.resnet18(weights=None)
-    model.fc = nn.Linear(model.fc.in_features, len(CLASSES))
+    model.fc = nn.Linear(model.fc.in_features, len(constants.CLASSES))
     model.load_state_dict(torch.load(model_path, map_location=DEVICE))
     model.to(DEVICE)
     model.eval()
     return model
 
 
-MODEL = load_model(MODEL_PATH)
+model_path = os.getenv("MODEL_PATH", constants.DEFAULT_MODEL_PATH)
+MODEL = load_model(model_path)
 
 
 transform = transforms.Compose(
@@ -109,7 +100,7 @@ def predict_image(image_path: str) -> FrameData:
     confidence = probabilities[predicted_index].item()
 
     logger.info(
-        f"Predicted Weather: {CLASSES[predicted_index]}  (Confidence: {confidence:.2f})"
+        f"Predicted Weather: {constants.CLASSES[predicted_index]}  (Confidence: {confidence:.2f})"
     )
 
     return FrameData(None, None, [probability.item() for probability in probabilities])
@@ -171,7 +162,7 @@ def predict_video(video_path: str, frame_skip: int = 30) -> List[FrameData]:
         if frame_index % frame_skip == 0:
             image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             probabilities, predicted_index = predict_frame(image)
-            label = CLASSES[predicted_index]
+            label = constants.CLASSES[predicted_index]
             confidence = probabilities[predicted_index].item()
 
             formatted_timestamp = format_timestamp(frame_index, fps)
@@ -198,7 +189,7 @@ def predict_video(video_path: str, frame_skip: int = 30) -> List[FrameData]:
 
     for frame in results:
         max_index = frame.probabilities.index(max(frame.probabilities))
-        labels.append(CLASSES[max_index])
+        labels.append(constants.CLASSES[max_index])
 
     most_common = Counter(labels).most_common(1)[0]
     logger.info("--- SUMMARY ---")

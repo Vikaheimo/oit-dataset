@@ -4,6 +4,8 @@ from torchvision import datasets, transforms, models
 import torch.nn as nn
 import torch.optim as optim
 
+import constants
+
 
 def main():
     transform = transforms.Compose(
@@ -43,7 +45,7 @@ def main():
 
         print(f"Epoch {epoch + 1} - Loss: {running_loss / len(dataloader):.4f}")
 
-    torch.save(model.state_dict(), "weather_resnet18.pth")
+    torch.save(model.state_dict(), constants.DEFAULT_MODEL_PATH)
 
 
 if __name__ == "__main__":
