@@ -6,11 +6,15 @@ predictions on single images or videos (key-frame sampling).
 
 import argparse
 from dataclasses import dataclass
+from datetime import datetime
+import matplotlib.pyplot as plt
+import matplotlib
+import numpy as np
 import logging
 import os
 import sys
 from collections import Counter
-from typing import List, Tuple, Union
+from typing import Tuple, Union
 import cv2
 from PIL import Image
 from dotenv import load_dotenv
@@ -24,17 +28,53 @@ import constants
 @dataclass
 class FrameData:
     """
-    Stores metadata and prediction probabilities for a single video frame or image.
+    Stores metadata and prediction probabilities for a single video frame.
 
     Attributes:
-        frame_index (int | None): The index of the frame in the video, or None for images.
-        formatted_timestamp (str | None): Human-readable timestamp for the frame, or None for images.
+        frame_index (int): The index of the frame in the video.
+        formatted_timestamp (str): Human-readable timestamp for the frame.
         probabilities (list[float]): List of predicted probabilities for each weather class,
             ordered according to the CLASSES list.
     """
 
-    frame_index: int | None
-    formatted_timestamp: str | None
+    frame_index: int
+    formatted_timestamp: str
+    probabilities: list[float]
+
+
+@dataclass
+class VideoData:
+    """
+    Stores metadata and prediction probabilities for a video.
+
+    Attributes:
+        video_path (str): The path to the video file.
+        frame_count (int): The total number of frames in the video.
+        fps (float): The frames per second of the video.
+        sample_rate (int): The frame sampling rate used.
+        predictions (list[FrameData]): A list of FrameData objects containing
+            prediction results for sampled frames.
+    """
+
+    video_path: str
+    frame_count: int
+    fps: float
+    sample_rate: int
+    predictions: list[FrameData]
+
+
+@dataclass
+class ImageData:
+    """
+    Stores metadata and prediction probabilities for a single image.
+
+    Attributes:
+        image_path (str): The path to the image file.
+        probabilities (list[float]): List of predicted probabilities for each weather class,
+            ordered according to the CLASSES list.
+    """
+
+    image_path: str
     probabilities: list[float]
 
 
@@ -89,10 +129,10 @@ transform = transforms.Compose(
 )
 
 
-def predict_image(image_path: str) -> FrameData:
+def predict_image(image_path: str) -> ImageData:
     """Predict weather from an image file.
 
-    Returns a FrameData object with data from the prediction.
+    Returns an ImageData object with data from the prediction.
     """
     logger.debug(f"Processing image: {image_path}")
     image = Image.open(image_path).convert("RGB")
@@ -103,7 +143,7 @@ def predict_image(image_path: str) -> FrameData:
         f"Predicted Weather: {constants.CLASSES[predicted_index]}  (Confidence: {confidence:.2f})"
     )
 
-    return FrameData(None, None, [probability.item() for probability in probabilities])
+    return ImageData(image_path, [probability.item() for probability in probabilities])
 
 
 def predict_frame(image: Image.Image) -> Tuple[torch.Tensor, int]:
@@ -137,10 +177,10 @@ def format_timestamp(frame_index: int, fps: float) -> str:
     return f"{minutes:02d}:{seconds:02d}"
 
 
-def predict_video(video_path: str, frame_skip: int = 30) -> List[FrameData]:
+def predict_video(video_path: str, frame_skip: int = 30) -> VideoData:
     """Predict weather for key frames in a video and show timestamps.
 
-    Returns a list of FrameData objects containing frame prediction results.
+    Returns a VideoData object containing frame prediction results.
     """
     video_capture = cv2.VideoCapture(video_path)
     if not video_capture.isOpened():
@@ -151,7 +191,13 @@ def predict_video(video_path: str, frame_skip: int = 30) -> List[FrameData]:
     logger.debug(f"Processing video: {video_path}")
     logger.debug(f"Total frames: {frame_count}, FPS: {fps:.2f}")
 
-    results: List[FrameData] = []
+    video_result = VideoData(
+        video_path=video_path,
+        frame_count=frame_count,
+        fps=fps,
+        sample_rate=frame_skip,
+        predictions=[],
+    )
     frame_index = 0
 
     while True:
@@ -166,11 +212,11 @@ def predict_video(video_path: str, frame_skip: int = 30) -> List[FrameData]:
             confidence = probabilities[predicted_index].item()
 
             formatted_timestamp = format_timestamp(frame_index, fps)
-            results.append(
+            video_result.predictions.append(
                 FrameData(
-                    frame_index,
-                    formatted_timestamp,
-                    [probability.item() for probability in probabilities],
+                    frame_index=frame_index,
+                    formatted_timestamp=formatted_timestamp,
+                    probabilities=[probability.item() for probability in probabilities],
                 )
             )
 
@@ -182,12 +228,12 @@ def predict_video(video_path: str, frame_skip: int = 30) -> List[FrameData]:
 
     video_capture.release()
 
-    if not results:
+    if not video_result.predictions:
         raise ValueError("No frames analyzed. Check if the video file is valid.")
 
     labels = []
 
-    for frame in results:
+    for frame in video_result.predictions:
         max_index = frame.probabilities.index(max(frame.probabilities))
         labels.append(constants.CLASSES[max_index])
 
@@ -195,12 +241,88 @@ def predict_video(video_path: str, frame_skip: int = 30) -> List[FrameData]:
     logger.info("--- SUMMARY ---")
     logger.info(f"Most frequent weather: {most_common[0]} ({most_common[1]} frames)")
 
-    return results
+    return video_result
+
+
+def generate_output_filename(
+    original_path: str, prefix: str = "prediction_plot"
+) -> str:
+    """
+    Generate a filename for the plot that includes a timestamp and original base name.
+    """
+    base_name = os.path.splitext(os.path.basename(original_path))[0]
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{prefix}_{base_name}_{timestamp}.png"
+
+
+def visualize_single_image(image: ImageData, width: int = 10, height: int = 6):
+    matplotlib.use("Agg")
+    plt.figure(figsize=(width, height))
+    plt.bar(
+        constants.CLASSES,
+        image.probabilities,
+        color="cornflowerblue",
+    )
+    plt.title("Prediction Probabilities for Image")
+    plt.ylabel("Probability")
+    plt.ylim(0, 1)
+    plt.xticks(rotation=30, ha="right")
+    plt.grid(axis="y", linestyle="--", alpha=0.6)
+    plt.tight_layout()
+
+    out_filename = generate_output_filename(image.image_path)
+    plt.savefig(out_filename, dpi=200)
+    plt.close()
+
+    logger.info(f"Saved plot as {out_filename}")
+
+
+def visualize_video_data(data: VideoData):
+    matplotlib.use("Agg")
+    if not data.predictions:
+        logger.info("No data to visualize.")
+        return
+
+    frame_indices: list[int] = []
+    probabilities_list = []
+    for frame in data.predictions:
+        frame_indices.append(frame.frame_index)
+
+        if len(frame.probabilities) != len(constants.CLASSES):
+            raise ValueError("Incorrect amount of probabilities in array!")
+        probabilities_list.append(frame.probabilities)
+
+    plt.figure(figsize=(10, 6))
+    for i, cls in enumerate(constants.CLASSES):
+        plt.plot(
+            frame_indices, np.array(probabilities_list)[:, i], label=cls, marker="o"
+        )
+
+    plt.title(
+        f"Prediction Probabilities Over Frames in Video (sampled every {data.sample_rate} frames)"
+    )
+    plt.xlabel("Frame Index")
+    plt.ylabel("Probability")
+    plt.ylim(0, 1)
+    plt.grid(alpha=0.5)
+    plt.legend()
+    plt.tight_layout()
+
+    # Ensure the x-axis starts at frame zero with no left margin
+    max_x = frame_indices[-1] if frame_indices else 0
+    plt.xlim(0, max_x)
+    plt.margins(x=0)
+
+    out_filename = generate_output_filename(data.video_path)
+    plt.savefig(out_filename)
+    plt.close()
+
+    logger.info(f"Saved plot as {out_filename}")
 
 
 def predict_video_or_image(
     input_path: str,
-) -> Union[FrameData, List[FrameData]]:
+) -> Union[ImageData, VideoData]:
     """
     Predict labels for a single image or a video file.
 
@@ -221,6 +343,26 @@ def predict_video_or_image(
     raise ValueError("Unsupported file type. Please provide an image or video file.")
 
 
+def data_visualization(data: Union[ImageData, VideoData]) -> None:
+    """Visualize prediction data for a single frame or multiple frames."""
+    visualization_enabled = os.getenv("VISUALIZE", "false").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+    if not visualization_enabled:
+        logger.info("Visualization is disabled. Skipping visualization step.")
+        return
+
+    logger.info("Generating visualization for prediction data.")
+
+    if isinstance(data, VideoData):
+        visualize_video_data(data)
+    else:
+        visualize_single_image(data)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Predict weather from an image or video file."
@@ -229,7 +371,8 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        predict_video_or_image(args.input_path)
+        data = predict_video_or_image(args.input_path)
+        data_visualization(data)
     except (FileNotFoundError, ValueError) as exc:
         logger.error(str(exc))
         sys.exit(1)
