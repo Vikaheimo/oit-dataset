@@ -4,41 +4,47 @@ from torchvision import datasets, transforms, models
 import torch.nn as nn
 import torch.optim as optim
 
-transform = transforms.Compose(
-    [
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ]
-)
 
-dataset = datasets.ImageFolder(root="./data", transform=transform)
-dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+def main():
+    transform = transforms.Compose(
+        [
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )
 
-print(dataset.classes)
-print(dataset.class_to_idx)
+    dataset = datasets.ImageFolder(root="./data", transform=transform)
+    dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-model.fc = nn.Linear(model.fc.in_features, len(dataset.classes))
+    print(dataset.classes)
+    print(dataset.class_to_idx)
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = model.to(device)
+    model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+    model.fc = nn.Linear(model.fc.in_features, len(dataset.classes))
 
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
 
-for epoch in range(5):
-    model.train()
-    running_loss = 0.0
-    for imgs, labels in dataloader:
-        imgs, labels = imgs.to(device), labels.to(device)
-        optimizer.zero_grad()
-        outputs = model(imgs)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
-        running_loss += loss.item()
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
-    print(f"Epoch {epoch + 1} - Loss: {running_loss / len(dataloader):.4f}")
+    for epoch in range(5):
+        model.train()
+        running_loss = 0.0
+        for imgs, labels in dataloader:
+            imgs, labels = imgs.to(device), labels.to(device)
+            optimizer.zero_grad()
+            outputs = model(imgs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.item()
 
-torch.save(model.state_dict(), "weather_resnet18.pth")
+        print(f"Epoch {epoch + 1} - Loss: {running_loss / len(dataloader):.4f}")
+
+    torch.save(model.state_dict(), "weather_resnet18.pth")
+
+
+if __name__ == "__main__":
+    main()
