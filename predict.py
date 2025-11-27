@@ -320,15 +320,21 @@ def predict_video_or_image(
     raise ValueError("Unsupported file type. Please provide an image or video file.")
 
 
-def generate_output_filename(
-    original_path: str, prefix: str = "prediction_plot"
-) -> str:
-    """
-    Generate a filename for the plot that includes a timestamp and original base name.
-    """
+def generate_output_path(original_path: str, prefix: str = "prediction_plot") -> str:
+    """Generate an output file path for saving plots."""
+
     base_name = os.path.splitext(os.path.basename(original_path))[0]
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{prefix}_{base_name}_{timestamp}.png"
+    filename = f"{prefix}_{base_name}_{timestamp}.png"
+
+    output_dir = os.getenv("OUTPUT_DIR", constants.DEFAULT_OUTPUT_DIR)
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to create output directory '{output_dir}': {exc}"
+        ) from exc
+    return os.path.join(output_dir, filename)
 
 
 def visualize_single_image(image: ImageData, width: int = 10, height: int = 6):
@@ -346,11 +352,11 @@ def visualize_single_image(image: ImageData, width: int = 10, height: int = 6):
     plt.grid(axis="y", linestyle="--", alpha=0.6)
     plt.tight_layout()
 
-    out_filename = generate_output_filename(image.image_path)
-    plt.savefig(out_filename, dpi=200)
+    output_path = generate_output_path(image.image_path)
+    plt.savefig(output_path, dpi=200)
     plt.close()
 
-    logger.info(f"Saved plot as {out_filename}")
+    logger.info(f"Saved plot as {output_path}")
 
 
 def visualize_video_data(data: VideoData):
@@ -389,11 +395,11 @@ def visualize_video_data(data: VideoData):
     plt.xlim(0, max_x)
     plt.margins(x=0)
 
-    out_filename = generate_output_filename(data.video_path)
-    plt.savefig(out_filename)
+    output_path = generate_output_path(data.video_path)
+    plt.savefig(output_path)
     plt.close()
 
-    logger.info(f"Saved plot as {out_filename}")
+    logger.info(f"Saved plot as {output_path}")
 
 
 def data_visualization(data: Union[ImageData, VideoData]) -> None:
@@ -426,7 +432,7 @@ def main() -> None:
     try:
         data = predict_video_or_image(args.input_path)
         data_visualization(data)
-    except (FileNotFoundError, ValueError) as exc:
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
         logger.error(str(exc))
         sys.exit(1)
     except Exception as exc:  # pragma: no cover - unexpected runtime error

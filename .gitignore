@@ -4,3 +4,4 @@ weather_resnet18.pth
 __pycache__/
 *.pyc
 .env
+outputs/
