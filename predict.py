@@ -83,47 +83,6 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 load_dotenv()
 
 
-def get_env_int(name: str, default: int, check_function=lambda x: True) -> int:
-    """Get an environment variable as an integer, with a default. Additional check function can be provided."""
-    value = os.getenv(name)
-
-    if value is None:
-        logger.info(f"Environment variable {name} not set. Defaulting to {default}.")
-        return default
-    try:
-        int_value = int(value)
-        if check_function(int_value):
-            return int_value
-        else:
-            logger.warning(
-                f"Environment variable {name} has value '{value}' which does not pass the check function. Defaulting to {default}."
-            )
-            return default
-    except ValueError:
-        logger.warning(
-            f"Environment variable {name} has non-integer value '{value}'. Defaulting to {default}."
-        )
-        return default
-
-
-def is_valid_frame_skip(value: int) -> bool:
-    """Check function to ensure frame skip is a positive integer. Logs warnings for unusual values."""
-    if value <= 0:
-        logger.warning("FRAME_SKIP must be a positive integer.")
-        return False
-
-    if value > constants.HIGH_FRAME_SKIP_THRESHOLD:
-        logger.warning(
-            f"FRAME_SKIP is unusually high (>{constants.HIGH_FRAME_SKIP_THRESHOLD}); this may lead to very few frames being analyzed."
-        )
-
-    if value < constants.LOW_FRAME_SKIP_THRESHOLD:
-        logger.warning(
-            f"FRAME_SKIP is quite low (<{constants.LOW_FRAME_SKIP_THRESHOLD}); this may lead to high processing times."
-        )
-    return True
-
-
 def get_log_level_from_env() -> int:
     """Get the logging level from the LOG_LEVEL environment variable."""
     log_level_str = os.getenv("LOG_LEVEL", constants.DEFAULT_LOG_LEVEL_STRING).upper()
@@ -147,8 +106,31 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def get_env_int(name: str, default: int, check_function=lambda x: True) -> int:
+    """Get an environment variable as an integer, with a default. Additional check function can be provided."""
+    value = os.getenv(name)
+
+    if value is None:
+        logger.info(f"Environment variable {name} not set. Defaulting to {default}.")
+        return default
+    try:
+        int_value = int(value)
+        if check_function(int_value):
+            return int_value
+        else:
+            logger.warning(
+                f"Environment variable {name} has value '{value}' which does not pass the check function. Defaulting to {default}."
+            )
+            return default
+    except ValueError:
+        logger.warning(
+            f"Environment variable {name} has non-integer value '{value}'. Defaulting to {default}."
+        )
+        return default
+
+
 def load_model(model_path: str) -> torch.nn.Module:
-    logger.debug(f"Loading model from path '{model_path}'")
+    logger.info(f"Loading model from path '{model_path}'")
     model = models.resnet18(weights=None)
     model.fc = nn.Linear(model.fc.in_features, len(constants.CLASSES))
     model.load_state_dict(torch.load(model_path, map_location=DEVICE))
@@ -168,6 +150,26 @@ transform = transforms.Compose(
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ]
 )
+
+logger.info(f"Model loaded successfully. Using device: {DEVICE}")
+
+
+def is_valid_frame_skip(value: int) -> bool:
+    """Check function to ensure frame skip is a positive integer. Logs warnings for unusual values."""
+    if value <= 0:
+        logger.warning("FRAME_SKIP must be a positive integer.")
+        return False
+
+    if value > constants.HIGH_FRAME_SKIP_THRESHOLD:
+        logger.warning(
+            f"FRAME_SKIP is unusually high (>{constants.HIGH_FRAME_SKIP_THRESHOLD}); this may lead to very few frames being analyzed."
+        )
+
+    if value < constants.LOW_FRAME_SKIP_THRESHOLD:
+        logger.warning(
+            f"FRAME_SKIP is quite low (<{constants.LOW_FRAME_SKIP_THRESHOLD}); this may lead to high processing times."
+        )
+    return True
 
 
 def predict_image(image_path: str) -> ImageData:
@@ -223,14 +225,15 @@ def predict_video(video_path: str, frame_skip: int) -> VideoData:
 
     Returns a VideoData object containing frame prediction results.
     """
+    logger.info(f"Processing video: {video_path} with frame skip: {frame_skip}")
+
     video_capture = cv2.VideoCapture(video_path)
     if not video_capture.isOpened():
         raise FileNotFoundError(f"Could not open video file: {video_path}")
 
     frame_count = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = video_capture.get(cv2.CAP_PROP_FPS)
-    logger.debug(f"Processing video: {video_path}")
-    logger.debug(f"Total frames: {frame_count}, FPS: {fps:.2f}")
+    logger.info(f"Total frames: {frame_count}, FPS: {fps:.2f}")
 
     video_result = VideoData(
         video_path=video_path,
@@ -269,6 +272,8 @@ def predict_video(video_path: str, frame_skip: int) -> VideoData:
 
     video_capture.release()
 
+    logger.info(f"Finished processing video: {video_path}")
+
     if not video_result.predictions:
         raise ValueError("No frames analyzed. Check if the video file is valid.")
 
@@ -282,8 +287,37 @@ def predict_video(video_path: str, frame_skip: int) -> VideoData:
     logger.info("--- SUMMARY ---")
     logger.info(f"Total frames analyzed: {len(video_result.predictions)}")
     logger.info(f"Most frequent weather: {most_common[0]} ({most_common[1]} frames)")
+    logger.info("----------------")
 
     return video_result
+
+
+def predict_video_or_image(
+    input_path: str,
+) -> Union[ImageData, VideoData]:
+    """
+    Predict labels for a single image or a video file.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        ValueError: If the file type is unsupported, or if no frames are analyzed in a video.
+    """
+
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(f"File not found: {input_path}")
+
+    file_extension = os.path.splitext(input_path)[1].lower()
+
+    if file_extension in [".jpg", ".jpeg", ".png", ".bmp"]:
+        return predict_image(input_path)
+    if file_extension in [".mp4", ".avi", ".mov", ".mkv"]:
+        frame_skip = get_env_int(
+            "FRAME_SKIP", constants.DEFAULT_FRAME_SKIP, is_valid_frame_skip
+        )
+
+        return predict_video(input_path, frame_skip)
+
+    raise ValueError("Unsupported file type. Please provide an image or video file.")
 
 
 def generate_output_filename(
@@ -360,33 +394,6 @@ def visualize_video_data(data: VideoData):
     plt.close()
 
     logger.info(f"Saved plot as {out_filename}")
-
-
-def predict_video_or_image(
-    input_path: str,
-) -> Union[ImageData, VideoData]:
-    """
-    Predict labels for a single image or a video file.
-
-    Raises:
-        FileNotFoundError: If the file does not exist.
-        ValueError: If the file type is unsupported, or if no frames are analyzed in a video.
-    """
-    if not os.path.exists(input_path):
-        raise FileNotFoundError(f"File not found: {input_path}")
-
-    file_extension = os.path.splitext(input_path)[1].lower()
-
-    if file_extension in [".jpg", ".jpeg", ".png", ".bmp"]:
-        return predict_image(input_path)
-    if file_extension in [".mp4", ".avi", ".mov", ".mkv"]:
-        frame_skip = get_env_int(
-            "FRAME_SKIP", constants.DEFAULT_FRAME_SKIP, is_valid_frame_skip
-        )
-
-        return predict_video(input_path, frame_skip)
-
-    raise ValueError("Unsupported file type. Please provide an image or video file.")
 
 
 def data_visualization(data: Union[ImageData, VideoData]) -> None:
