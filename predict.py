@@ -26,23 +26,6 @@ import constants
 
 
 @dataclass
-class FrameData:
-    """
-    Stores metadata and prediction probabilities for a single video frame.
-
-    Attributes:
-        frame_index (int): The index of the frame in the video.
-        formatted_timestamp (str): Human-readable timestamp for the frame.
-        probabilities (list[float]): List of predicted probabilities for each weather class,
-            ordered according to the CLASSES list.
-    """
-
-    frame_index: int
-    formatted_timestamp: str
-    probabilities: list[float]
-
-
-@dataclass
 class VideoData:
     """
     Stores metadata and prediction probabilities for a video.
@@ -52,15 +35,19 @@ class VideoData:
         frame_count (int): The total number of frames in the video.
         fps (float): The frames per second of the video.
         sample_rate (int): The frame sampling rate used.
-        predictions (list[FrameData]): A list of FrameData objects containing
-            prediction results for sampled frames.
+        timestamps (np.ndarray): Array of timestamps for each analyzed frame (shape (n,)).
+        probabilities (np.ndarray): 2D array of predicted probabilities for each analyzed frame
+            (shape (n, num_classes)).
+        class_names (list[str]): List of weather class names corresponding to the probabilities.
     """
 
     video_path: str
     frame_count: int
     fps: float
     sample_rate: int
-    predictions: list[FrameData]
+    timestamps: np.ndarray
+    probabilities: np.ndarray
+    class_names: list[str]
 
 
 @dataclass
@@ -235,13 +222,9 @@ def predict_video(video_path: str, frame_skip: int) -> VideoData:
     fps = video_capture.get(cv2.CAP_PROP_FPS)
     logger.info(f"Total frames: {frame_count}, FPS: {fps:.2f}")
 
-    video_result = VideoData(
-        video_path=video_path,
-        frame_count=frame_count,
-        fps=fps,
-        sample_rate=frame_skip,
-        predictions=[],
-    )
+    predictions = []
+    timestamps = []
+
     frame_index = 0
 
     while True:
@@ -252,40 +235,42 @@ def predict_video(video_path: str, frame_skip: int) -> VideoData:
         if frame_index % frame_skip == 0:
             image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             probabilities, predicted_index = predict_frame(image)
-            label = constants.CLASSES[predicted_index]
-            confidence = probabilities[predicted_index].item()
 
             formatted_timestamp = format_timestamp(frame_index, fps)
-            video_result.predictions.append(
-                FrameData(
-                    frame_index=frame_index,
-                    formatted_timestamp=formatted_timestamp,
-                    probabilities=[probability.item() for probability in probabilities],
-                )
-            )
+            predictions.append([probability.item() for probability in probabilities])
+            timestamps.append((frame_index, formatted_timestamp))
 
-            logger.debug(
-                f"Frame {frame_index} ({formatted_timestamp}): {label} ({confidence:.2f})"
-            )
+            logger.debug("Processed frame %d at %s", frame_index, formatted_timestamp)
 
         frame_index += 1
 
     video_capture.release()
 
+    video_result = VideoData(
+        video_path=video_path,
+        frame_count=frame_count,
+        fps=fps,
+        sample_rate=frame_skip,
+        class_names=constants.CLASSES,
+        timestamps=np.array(
+            timestamps, dtype=[("frame_index", int), ("timestamp", "U6")]
+        ),
+        probabilities=np.array(predictions),
+    )
+
     logger.info(f"Finished processing video: {video_path}")
 
-    if not video_result.predictions:
+    if not video_result.probabilities.size:
         raise ValueError("No frames analyzed. Check if the video file is valid.")
 
     labels = []
-
-    for frame in video_result.predictions:
-        max_index = frame.probabilities.index(max(frame.probabilities))
-        labels.append(constants.CLASSES[max_index])
+    for probs in video_result.probabilities:
+        predicted_index = int(np.argmax(probs))
+        labels.append(constants.CLASSES[predicted_index])
 
     most_common = Counter(labels).most_common(1)[0]
     logger.info("--- SUMMARY ---")
-    logger.info(f"Total frames analyzed: {len(video_result.predictions)}")
+    logger.info(f"Total frames analyzed: {len(video_result.probabilities)}")
     logger.info(f"Most frequent weather: {most_common[0]} ({most_common[1]} frames)")
     logger.info("----------------")
 
@@ -361,24 +346,19 @@ def visualize_single_image(image: ImageData, width: int = 10, height: int = 6):
 
 def visualize_video_data(data: VideoData):
     matplotlib.use("Agg")
-    if not data.predictions:
+    if not isinstance(data.probabilities, np.ndarray) or data.probabilities.size == 0:
         logger.info("No data to visualize.")
         return
 
-    frame_indices: list[int] = []
-    probabilities_list = []
-    for frame in data.predictions:
-        frame_indices.append(frame.frame_index)
+    frame_indices = data.timestamps["frame_index"]
 
-        if len(frame.probabilities) != len(constants.CLASSES):
-            raise ValueError("Incorrect amount of probabilities in array!")
-        probabilities_list.append(frame.probabilities)
+    probs = data.probabilities
+    if probs.ndim != 2 or probs.shape[1] != len(constants.CLASSES):
+        raise ValueError("Incorrect amount of probabilities in array!")
 
     plt.figure(figsize=(10, 6))
     for i, cls in enumerate(constants.CLASSES):
-        plt.plot(
-            frame_indices, np.array(probabilities_list)[:, i], label=cls, marker="o"
-        )
+        plt.plot(frame_indices, probs[:, i], label=cls, marker="o")
 
     plt.title(
         f"Prediction Probabilities Over Frames in Video (sampled every {data.sample_rate} frames)"
@@ -391,7 +371,7 @@ def visualize_video_data(data: VideoData):
     plt.tight_layout()
 
     # Ensure the x-axis starts at frame zero with no left margin
-    max_x = frame_indices[-1] if frame_indices else 0
+    max_x = frame_indices[-1] if len(frame_indices) > 0 else 0
     plt.xlim(0, max_x)
     plt.margins(x=0)
 
