@@ -307,7 +307,9 @@ def predict_video_or_image(
     raise ValueError("Unsupported file type. Please provide an image or video file.")
 
 
-def generate_output_path(data: Union[ImageData, VideoData], prefix: str = "prediction_plot") -> str:
+def generate_output_path(
+    data: Union[ImageData, VideoData], prefix: str = "prediction_plot"
+) -> str:
     """Generate an output file path for saving plots."""
 
     if isinstance(data, ImageData):
@@ -407,8 +409,69 @@ def data_visualization(data: Union[ImageData, VideoData]) -> None:
 
     if isinstance(data, VideoData):
         visualize_video_data(data)
+        window_size = get_env_int(
+            "SLIDING_WINDOW_SIZE",
+            constants.DEFAULT_SLIDING_WINDOW_SIZE,
+            lambda x: x > 0,
+        )
+        visualize_video_data(create_sliding_windows_with_time(data, window_size))
     else:
         visualize_single_image(data)
+
+
+def create_sliding_windows_with_time(
+    data: VideoData,
+    window_size: int,
+    step_size: int = 1,
+) -> VideoData:
+    """
+    Runs a sliding window on a VideoData object and creates a new VideoData object from
+    the sliding window data.
+
+    Each window aggregates probabilities (e.g., by averaging) and assigns the center
+    timestamp to represent the window.
+
+    Args:
+        data (VideoData): Input video data.
+        window_size (int): Number of frames per sliding window.
+        step_size (int): Number of frames to step the window by.
+
+    Returns:
+        VideoData: New object with smoothed (windowed) probabilities and reduced timestamps.
+    """
+
+    num_frames = len(data.timestamps)
+    num_classes = data.probabilities.shape[1]
+
+    num_windows = (num_frames - window_size) // step_size + 1
+
+    windowed_timestamps = []
+    windowed_probabilities = np.zeros((num_windows, num_classes))
+
+    for i in range(num_windows):
+        start = i * step_size
+        end = start + window_size
+
+        window_probs = data.probabilities[start:end]
+        # window_times = data.timestamps[start:end]
+
+        windowed_probabilities[i] = np.mean(window_probs, axis=0)
+
+        center_idx = start + window_size // 2
+        windowed_timestamps.append(data.timestamps[center_idx])
+
+    windowed_timestamps = np.array(windowed_timestamps)
+
+    return VideoData(
+        video_path=data.video_path,
+        name=f"sliding_window_{window_size} {data.name or os.path.basename(data.video_path)}",
+        frame_count=len(windowed_timestamps),
+        fps=data.fps,
+        sample_rate=data.sample_rate,
+        timestamps=windowed_timestamps,
+        probabilities=windowed_probabilities,
+        class_names=data.class_names,
+    )
 
 
 def main() -> None:
