@@ -83,6 +83,47 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 load_dotenv()
 
 
+def get_env_int(name: str, default: int, check_function=lambda x: True) -> int:
+    """Get an environment variable as an integer, with a default. Additional check function can be provided."""
+    value = os.getenv(name)
+
+    if value is None:
+        logger.info(f"Environment variable {name} not set. Defaulting to {default}.")
+        return default
+    try:
+        int_value = int(value)
+        if check_function(int_value):
+            return int_value
+        else:
+            logger.warning(
+                f"Environment variable {name} has value '{value}' which does not pass the check function. Defaulting to {default}."
+            )
+            return default
+    except ValueError:
+        logger.warning(
+            f"Environment variable {name} has non-integer value '{value}'. Defaulting to {default}."
+        )
+        return default
+
+
+def is_valid_frame_skip(value: int) -> bool:
+    """Check function to ensure frame skip is a positive integer. Logs warnings for unusual values."""
+    if value <= 0:
+        logger.warning("FRAME_SKIP must be a positive integer.")
+        return False
+
+    if value > constants.HIGH_FRAME_SKIP_THRESHOLD:
+        logger.warning(
+            f"FRAME_SKIP is unusually high (>{constants.HIGH_FRAME_SKIP_THRESHOLD}); this may lead to very few frames being analyzed."
+        )
+
+    if value < constants.LOW_FRAME_SKIP_THRESHOLD:
+        logger.warning(
+            f"FRAME_SKIP is quite low (<{constants.LOW_FRAME_SKIP_THRESHOLD}); this may lead to high processing times."
+        )
+    return True
+
+
 def get_log_level_from_env() -> int:
     """Get the logging level from the LOG_LEVEL environment variable."""
     log_level_str = os.getenv("LOG_LEVEL", constants.DEFAULT_LOG_LEVEL_STRING).upper()
@@ -177,7 +218,7 @@ def format_timestamp(frame_index: int, fps: float) -> str:
     return f"{minutes:02d}:{seconds:02d}"
 
 
-def predict_video(video_path: str, frame_skip: int = 30) -> VideoData:
+def predict_video(video_path: str, frame_skip: int) -> VideoData:
     """Predict weather for key frames in a video and show timestamps.
 
     Returns a VideoData object containing frame prediction results.
@@ -239,6 +280,7 @@ def predict_video(video_path: str, frame_skip: int = 30) -> VideoData:
 
     most_common = Counter(labels).most_common(1)[0]
     logger.info("--- SUMMARY ---")
+    logger.info(f"Total frames analyzed: {len(video_result.predictions)}")
     logger.info(f"Most frequent weather: {most_common[0]} ({most_common[1]} frames)")
 
     return video_result
@@ -338,7 +380,11 @@ def predict_video_or_image(
     if file_extension in [".jpg", ".jpeg", ".png", ".bmp"]:
         return predict_image(input_path)
     if file_extension in [".mp4", ".avi", ".mov", ".mkv"]:
-        return predict_video(input_path, frame_skip=30)
+        frame_skip = get_env_int(
+            "FRAME_SKIP", constants.DEFAULT_FRAME_SKIP, is_valid_frame_skip
+        )
+
+        return predict_video(input_path, frame_skip)
 
     raise ValueError("Unsupported file type. Please provide an image or video file.")
 
