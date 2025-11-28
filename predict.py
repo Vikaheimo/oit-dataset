@@ -14,7 +14,7 @@ import logging
 import os
 import sys
 from collections import Counter
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional
 import cv2
 from PIL import Image
 from dotenv import load_dotenv
@@ -39,6 +39,7 @@ class VideoData:
         probabilities (np.ndarray): 2D array of predicted probabilities for each analyzed frame
             (shape (n, num_classes)).
         class_names (list[str]): List of weather class names corresponding to the probabilities.
+        name (Optional[str]): An optional display name for the video, used for visualization.
     """
 
     video_path: str
@@ -48,6 +49,7 @@ class VideoData:
     timestamps: np.ndarray
     probabilities: np.ndarray
     class_names: list[str]
+    name: Optional[str] = None
 
 
 @dataclass
@@ -305,10 +307,16 @@ def predict_video_or_image(
     raise ValueError("Unsupported file type. Please provide an image or video file.")
 
 
-def generate_output_path(original_path: str, prefix: str = "prediction_plot") -> str:
+def generate_output_path(data: Union[ImageData, VideoData], prefix: str = "prediction_plot") -> str:
     """Generate an output file path for saving plots."""
 
-    base_name = os.path.splitext(os.path.basename(original_path))[0]
+    if isinstance(data, ImageData):
+        base_name = os.path.splitext(os.path.basename(data.image_path))[0]
+    elif isinstance(data, VideoData):
+        base_name = data.name or os.path.splitext(os.path.basename(data.video_path))[0]
+    else:
+        raise ValueError("Unsupported data type for generating output path.")
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{prefix}_{base_name}_{timestamp}.png"
 
@@ -337,7 +345,7 @@ def visualize_single_image(image: ImageData, width: int = 10, height: int = 6):
     plt.grid(axis="y", linestyle="--", alpha=0.6)
     plt.tight_layout()
 
-    output_path = generate_output_path(image.image_path)
+    output_path = generate_output_path(image)
     plt.savefig(output_path, dpi=200)
     plt.close()
 
@@ -351,7 +359,6 @@ def visualize_video_data(data: VideoData):
         return
 
     frame_indices = data.timestamps["frame_index"]
-
     probs = data.probabilities
     if probs.ndim != 2 or probs.shape[1] != len(constants.CLASSES):
         raise ValueError("Incorrect amount of probabilities in array!")
@@ -360,9 +367,12 @@ def visualize_video_data(data: VideoData):
     for i, cls in enumerate(constants.CLASSES):
         plt.plot(frame_indices, probs[:, i], label=cls, marker="o")
 
+    display_name = data.name or os.path.basename(data.video_path)
     plt.title(
-        f"Prediction Probabilities Over Frames in Video (sampled every {data.sample_rate} frames)"
+        f"Prediction Probabilities Over Frames ({display_name}) "
+        f"(sampled every {data.sample_rate} frames)"
     )
+
     plt.xlabel("Frame Index")
     plt.ylabel("Probability")
     plt.ylim(0, 1)
@@ -370,12 +380,11 @@ def visualize_video_data(data: VideoData):
     plt.legend()
     plt.tight_layout()
 
-    # Ensure the x-axis starts at frame zero with no left margin
     max_x = frame_indices[-1] if len(frame_indices) > 0 else 0
     plt.xlim(0, max_x)
     plt.margins(x=0)
 
-    output_path = generate_output_path(data.video_path)
+    output_path = generate_output_path(data)
     plt.savefig(output_path)
     plt.close()
 
