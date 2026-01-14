@@ -24,6 +24,7 @@ import torch.nn as nn
 from torchvision import models, transforms
 
 import constants
+from utils import get_log_level_from_env, is_image_file, is_video_file
 
 
 @dataclass
@@ -68,23 +69,9 @@ class ImageData:
     probabilities: list[float]
 
 
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = os.getenv("DEVICE", "cpu")
 
 load_dotenv()
-
-
-def get_log_level_from_env() -> int:
-    """Get the logging level from the LOG_LEVEL environment variable."""
-    log_level_str = os.getenv("LOG_LEVEL", constants.DEFAULT_LOG_LEVEL_STRING).upper()
-
-    # `logging.getLevelName` doesn't convert strings properly,
-    # so we use `getattr` to map manually to level constants.
-    level = getattr(logging, log_level_str, None)
-
-    if isinstance(level, int):
-        return level
-
-    return constants.DEFAULT_LOG_LEVEL
 
 
 logging.basicConfig(
@@ -294,11 +281,9 @@ def predict_video_or_image(
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"File not found: {input_path}")
 
-    file_extension = os.path.splitext(input_path)[1].lower()
-
-    if file_extension in [".jpg", ".jpeg", ".png", ".bmp"]:
+    if is_image_file(input_path):
         return predict_image(input_path)
-    if file_extension in [".mp4", ".avi", ".mov", ".mkv"]:
+    if is_video_file(input_path):
         frame_skip = get_env_int(
             "FRAME_SKIP", constants.DEFAULT_FRAME_SKIP, is_valid_frame_skip
         )
@@ -479,7 +464,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Predict weather from an image or video file."
     )
-    parser.add_argument("input_path", help="Path to image or video file")
+    parser.add_argument("input_path", type=Path, help="Path to image or video file")
     args = parser.parse_args()
 
     try:
