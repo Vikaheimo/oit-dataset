@@ -8,14 +8,6 @@ from utils import get_log_level_from_env
 import numpy as np
 import pandas as pd
 
-
-logging.basicConfig(
-    level=get_log_level_from_env(),
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%m/%d/%Y %I:%M:%S %p",
-    filename="app.log",
-)
-
 logger = logging.getLogger(__name__)
 
 
@@ -106,4 +98,10 @@ def main():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=get_log_level_from_env(),
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%m/%d/%Y %I:%M:%S %p",
+        filename="app.log",
+    )
     main()

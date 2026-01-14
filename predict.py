@@ -73,12 +73,12 @@ DEVICE = os.getenv("DEVICE", "cpu")
 
 load_dotenv()
 
-
-logging.basicConfig(
-    level=get_log_level_from_env(),
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%m/%d/%Y %I:%M:%S %p",
-)
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=get_log_level_from_env(),
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%m/%d/%Y %I:%M:%S %p",
+    )
 
 logger = logging.getLogger(__name__)
 
