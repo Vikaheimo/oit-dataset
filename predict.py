@@ -7,6 +7,7 @@ predictions on single images or videos (key-frame sampling).
 import argparse
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
@@ -31,7 +32,7 @@ class VideoData:
     Stores metadata and prediction probabilities for a video.
 
     Attributes:
-        video_path (str): The path to the video file.
+        video_path (Path): The path to the video file.
         frame_count (int): The total number of frames in the video.
         fps (float): The frames per second of the video.
         sample_rate (int): The frame sampling rate used.
@@ -42,7 +43,7 @@ class VideoData:
         name (Optional[str]): An optional display name for the video, used for visualization.
     """
 
-    video_path: str
+    video_path: Path
     frame_count: int
     fps: float
     sample_rate: int
@@ -58,12 +59,12 @@ class ImageData:
     Stores metadata and prediction probabilities for a single image.
 
     Attributes:
-        image_path (str): The path to the image file.
+        image_path (Path): The path to the image file.
         probabilities (list[float]): List of predicted probabilities for each weather class,
             ordered according to the CLASSES list.
     """
 
-    image_path: str
+    image_path: Path
     probabilities: list[float]
 
 
@@ -161,7 +162,7 @@ def is_valid_frame_skip(value: int) -> bool:
     return True
 
 
-def predict_image(image_path: str) -> ImageData:
+def predict_image(image_path: Path) -> ImageData:
     """Predict weather from an image file.
 
     Returns an ImageData object with data from the prediction.
@@ -209,14 +210,14 @@ def format_timestamp(frame_index: int, fps: float) -> str:
     return f"{minutes:02d}:{seconds:02d}"
 
 
-def predict_video(video_path: str, frame_skip: int) -> VideoData:
+def predict_video(video_path: Path, frame_skip: int) -> VideoData:
     """Predict weather for key frames in a video and show timestamps.
 
     Returns a VideoData object containing frame prediction results.
     """
     logger.info(f"Processing video: {video_path} with frame skip: {frame_skip}")
 
-    video_capture = cv2.VideoCapture(video_path)
+    video_capture = cv2.VideoCapture(str(video_path))
     if not video_capture.isOpened():
         raise FileNotFoundError(f"Could not open video file: {video_path}")
 
@@ -280,7 +281,7 @@ def predict_video(video_path: str, frame_skip: int) -> VideoData:
 
 
 def predict_video_or_image(
-    input_path: str,
+    input_path: Path,
 ) -> Union[ImageData, VideoData]:
     """
     Predict labels for a single image or a video file.
