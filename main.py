@@ -25,13 +25,13 @@ def main():
     model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
     model.fc = nn.Linear(model.fc.in_features, len(dataset.classes))
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
     model = model.to(device)
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
-    for epoch in range(5):
+    for epoch in range(20):
         model.train()
         running_loss = 0.0
         for imgs, labels in dataloader:
