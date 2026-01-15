@@ -2,11 +2,11 @@ import logging
 import sys
 import os
 from pathlib import Path
+import numpy as np
+import pandas as pd
 
 from predict import ImageData, VideoData, predict_video_or_image
 from utils import get_log_level_from_env
-import numpy as np
-import pandas as pd
 
 logger = logging.getLogger(__name__)
 
