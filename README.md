@@ -8,10 +8,11 @@ Make sure that you have `uv` installed. That can be done from [here](https://doc
 
 ## Running the program
 
-All of the scripts can then be run using `uv run <script>`, e.g. `uv run main.py`.
+All of the scripts can then be run using `uv run <script>`, e.g. `uv run src/main.py`.
 
-| Script name     | Purpose                                 |
-| --------------- | --------------------------------------- |
-| main.py         | Trains the neural network.              |
-| dataset_info.py | Checks and reports on the dataset size. |
-| predict.py      | Predicts the weather of a single image. |
+| Script name          | Purpose                                              |
+| -------------------- | ---------------------------------------------------- |
+| src/main.py          | Trains the neural network.                           |
+| src/dataset_info.py  | Checks and reports on the dataset size.              |
+| src/predict.py       | Predicts the weather of a single image or video.     |
+| src/process_batch.py | Processes a batch of images or videos from a folder. |
