@@ -197,7 +197,9 @@ def format_timestamp(frame_index: int, fps: float) -> str:
     return f"{minutes:02d}:{seconds:02d}"
 
 
-def predict_video(video_path: Path, frame_skip: int) -> VideoData:
+def predict_video(
+    video_path: Path, frame_skip=constants.DEFAULT_FRAME_SKIP
+) -> VideoData:
     """Predict weather for key frames in a video and show timestamps.
 
     Returns a VideoData object containing frame prediction results.
