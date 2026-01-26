@@ -44,7 +44,7 @@ def compute_video_features(video: VideoData) -> VideoFeatures:
         "beautiful_sunset",
         "good_cloudy",
     ]
-    boring_classes = ["boring_cloudy"]
+    boring_classes = ["clear_sky", "boring_cloudy"]
 
     beautiful_ratio = sum(
         mean_probs[class_to_idx[c]] for c in beautiful_classes if c in class_to_idx
