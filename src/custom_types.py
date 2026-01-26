@@ -6,6 +6,17 @@ import numpy as np
 
 
 @dataclass
+class Weights:
+    beautiful: float
+    boring: float
+    fog: float
+    storm: float
+    entropy: float
+    temporal_change: float
+    phases: float
+
+
+@dataclass
 class VideoData:
     """
     Stores metadata and prediction probabilities for a video.

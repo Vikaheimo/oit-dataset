@@ -3,7 +3,7 @@ import os
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from src.types import VideoData
+from custom_types import VideoData
 import constants
 
 

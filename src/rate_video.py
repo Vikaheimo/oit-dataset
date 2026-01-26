@@ -4,8 +4,9 @@ import logging
 from pathlib import Path
 import numpy as np
 
+import constants
 from utils import get_log_level_from_env
-from src.types import VideoData
+from custom_types import VideoData, Weights
 
 
 logger = logging.getLogger(__name__)
@@ -79,15 +80,15 @@ def compute_video_features(video: VideoData) -> VideoFeatures:
     )
 
 
-def rate_video_from_features(features: VideoFeatures) -> float:
+def rate_video_from_features(features: VideoFeatures, weights: Weights) -> float:
     score = (
-        0.35 * features.beautiful_ratio
-        - 0.25 * features.boring_ratio
-        - 0.15 * features.fog_ratio
-        + 0.20 * features.storm_peak
-        + 0.15 * features.entropy
-        + 0.15 * features.temporal_change
-        + 0.10 * min(features.phase_count / 10.0, 1.0)
+        weights.beautiful * features.beautiful_ratio
+        + weights.boring * features.boring_ratio
+        + weights.fog * features.fog_ratio
+        + weights.storm * features.storm_peak
+        + weights.entropy * features.entropy
+        + weights.temporal_change * features.temporal_change
+        + weights.phases * min(features.phase_count / 10.0, 1.0)
     )
 
     score = np.clip(score * 100.0, 0.0, 100.0)
@@ -101,7 +102,7 @@ def main():
 
     video_prediction = predict_video(args.input_path)
     video_features = compute_video_features(video_prediction)
-    rating = rate_video_from_features(video_features)
+    rating = rate_video_from_features(video_features, constants.DEFAULT_RATING_WEIGHTS)
 
     logger.info(f"Got rating {rating}, for video {args.input_path}")
 

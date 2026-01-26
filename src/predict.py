@@ -23,7 +23,7 @@ import torch.nn as nn
 from torchvision import models, transforms
 
 import constants
-from src.types import ImageData, VideoData
+from custom_types import ImageData, VideoData
 from src.utils import get_log_level_from_env, is_image_file, is_video_file
 
 
