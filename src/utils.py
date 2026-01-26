@@ -1,7 +1,41 @@
 import logging
 import os
+import pandas as pd
+import numpy as np
 from pathlib import Path
+from src.types import VideoData
 import constants
+
+
+def video_data_to_dataframe(video_data: VideoData) -> pd.DataFrame:
+    # Extract structured timestamp fields
+    frame_indices = video_data.timestamps["frame_index"]
+    timestamps = video_data.timestamps["timestamp"]
+
+    df = pd.DataFrame(
+        {
+            "frame_idx": frame_indices,
+            "timestamp": timestamps,
+        }
+    )
+
+    # Add probability columns (one per class)
+    prob_df = pd.DataFrame(
+        np.asarray(video_data.probabilities),
+        columns=video_data.class_names,
+    )
+
+    df = pd.concat([df, prob_df], axis=1)
+
+    # Metadata columns
+    df["video_path"] = str(video_data.video_path)
+    df["fps"] = video_data.fps
+    df["sample_rate"] = video_data.sample_rate
+
+    if video_data.name:
+        df["video_name"] = video_data.name
+
+    return df
 
 
 def get_log_level_from_env() -> int:

@@ -4,8 +4,8 @@ import logging
 from pathlib import Path
 import numpy as np
 
-from predict import VideoData, predict_video
 from utils import get_log_level_from_env
+from src.types import VideoData
 
 
 logger = logging.getLogger(__name__)
@@ -107,6 +107,8 @@ def main():
 
 
 if __name__ == "__main__":
+    from predict import predict_video
+
     logging.basicConfig(
         level=get_log_level_from_env(),
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",

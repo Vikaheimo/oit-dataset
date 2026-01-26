@@ -2,44 +2,12 @@ import logging
 import sys
 import os
 from pathlib import Path
-import numpy as np
 import pandas as pd
 
-from predict import ImageData, VideoData, predict_video_or_image
-from utils import get_log_level_from_env
+from src.predict import ImageData, predict_video_or_image
+from src.utils import get_log_level_from_env, video_data_to_dataframe
 
 logger = logging.getLogger(__name__)
-
-
-def video_data_to_dataframe(video_data: VideoData) -> pd.DataFrame:
-    # Extract structured timestamp fields
-    frame_indices = video_data.timestamps["frame_index"]
-    timestamps = video_data.timestamps["timestamp"]
-
-    df = pd.DataFrame(
-        {
-            "frame_idx": frame_indices,
-            "timestamp": timestamps,
-        }
-    )
-
-    # Add probability columns (one per class)
-    prob_df = pd.DataFrame(
-        np.asarray(video_data.probabilities),
-        columns=video_data.class_names,
-    )
-
-    df = pd.concat([df, prob_df], axis=1)
-
-    # Metadata columns
-    df["video_path"] = str(video_data.video_path)
-    df["fps"] = video_data.fps
-    df["sample_rate"] = video_data.sample_rate
-
-    if video_data.name:
-        df["video_name"] = video_data.name
-
-    return df
 
 
 def process_file(file_path: Path) -> pd.DataFrame | None:
