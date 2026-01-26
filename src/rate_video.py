@@ -88,7 +88,7 @@ def rate_video_from_features(features: VideoFeatures, weights: Weights) -> float
         + weights.storm * features.storm_peak
         + weights.entropy * features.entropy
         + weights.temporal_change * features.temporal_change
-        + weights.phases * min(features.phase_count / 10.0, 1.0)
+        + weights.phases * features.phase_count
     )
 
     score = np.clip(score * 100.0, 0.0, 100.0)
