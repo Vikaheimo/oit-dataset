@@ -38,6 +38,20 @@ def video_data_to_dataframe(video_data: VideoData) -> pd.DataFrame:
     return df
 
 
+def smoothen_np_array(array: np.ndarray, window_size: int = 3) -> np.ndarray:
+    kernel = np.ones(window_size)
+
+    numerator = np.apply_along_axis(
+        lambda r: np.convolve(r, kernel, mode="same"), axis=1, arr=array
+    )
+
+    denominator = np.apply_along_axis(
+        lambda r: np.convolve(np.ones_like(r), kernel, mode="same"), axis=1, arr=array
+    )
+
+    return numerator / denominator
+
+
 def get_log_level_from_env() -> int:
     """Get the logging level from the LOG_LEVEL environment variable."""
     log_level_str = os.getenv("LOG_LEVEL", constants.DEFAULT_LOG_LEVEL_STRING).upper()

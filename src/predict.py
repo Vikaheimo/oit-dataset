@@ -24,7 +24,7 @@ from torchvision import models, transforms
 
 import constants
 from custom_types import ImageData, VideoData
-from src.utils import get_log_level_from_env, is_image_file, is_video_file
+from utils import get_log_level_from_env, is_image_file, is_video_file
 
 
 DEVICE = os.getenv("DEVICE", "cpu")
