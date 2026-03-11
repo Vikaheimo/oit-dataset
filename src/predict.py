@@ -311,32 +311,54 @@ def visualize_video_data(data: VideoData):
     if probs.ndim != 2 or probs.shape[1] != len(constants.CLASSES):
         raise ValueError("Incorrect amount of probabilities in array!")
 
-    plt.figure(figsize=(10, 6))
+    # Main plot (no legend)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    lines = []
+
     for i, cls in enumerate(constants.CLASSES):
-        plt.plot(frame_indices, probs[:, i], label=cls, marker="o")
+        (line,) = ax.plot(
+            frame_indices,
+            probs[:, i],
+            label=cls,
+            marker="o",
+        )
+        lines.append(line)
 
     display_name = data.name or os.path.basename(data.video_path)
-    plt.title(
+    ax.set_title(
         f"Prediction Probabilities Over Frames ({display_name}) "
         f"(sampled every {data.sample_rate} frames)"
     )
 
-    plt.xlabel("Frame Index")
-    plt.ylabel("Probability")
-    plt.ylim(0, 1)
-    plt.grid(alpha=0.5)
-    plt.legend()
-    plt.tight_layout()
+    ax.set_xlabel("Frame Index")
+    ax.set_ylabel("Probability")
+    ax.set_ylim(0, 1)
+    ax.grid(alpha=0.5)
 
     max_x = frame_indices[-1] if len(frame_indices) > 0 else 0
-    plt.xlim(0, max_x)
-    plt.margins(x=0)
+    ax.set_xlim(0, max_x)
+    ax.margins(x=0)
 
     output_path = generate_output_path(data)
-    plt.savefig(output_path)
-    plt.close()
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
+
+    # Separate legend figure
+    legend_fig = plt.figure(figsize=(4, 2))
+    legend_fig.legend(
+        handles=lines,
+        labels=[line.get_label() for line in lines],
+        loc="center",
+        frameon=True,
+    )
+
+    legend_output_path = output_path.replace(".png", "_legend.png")
+    legend_fig.savefig(legend_output_path)
+    plt.close(legend_fig)
 
     logger.info(f"Saved plot as {output_path}")
+    logger.info(f"Saved legend as {legend_output_path}")
 
 
 def data_visualization(data: Union[ImageData, VideoData]) -> None:
